@@ -301,53 +301,82 @@ router.delete('/:id', async (req, res) => {
 
 // Approve and save an order for a customer
 router.post('/approve_order', async (req, res) => {
-  const data = req.body;
+  const { customer_name, customer_phone_number, ...data } = req.body;
+
+  if (!customer_name || !customer_phone_number) {
+    return res.status(400).json({ error: 'Customer name and phone number are required' });
+  }
 
   try {
-    console.log('Incoming data:', data);
+    console.log('Received order data:', { customer_name, customer_phone_number, ...data });
 
-    let customer = await Customer.findOne({ where: { phone_number: data.customer_phone_number } });
-
-    if (!customer) {
-      customer = await Customer.create({
-        name: data.customer_name,
-        phone_number: data.customer_phone_number,
+    // Start a transaction
+    const result = await sequelize.transaction(async (t) => {
+      // Check if customer exists
+      let customer = await Customer.findOne({ 
+        where: { phone_number: customer_phone_number },
+        transaction: t
       });
-    }
 
-    const orderDate = moment(data.order_date).toDate();
-    if (isNaN(orderDate)) {
-      console.error('Invalid date:', data.order_date);
-      return res.status(400).json({ error: 'Invalid order date format' });
-    }
+      console.log('Existing customer:', customer);
 
-    console.log('Order Date:', orderDate);
+      // If customer doesn't exist, create a new one
+      if (!customer) {
+        customer = await Customer.create({
+          name: customer_name,
+          phone_number: customer_phone_number,
+        }, { transaction: t });
+        console.log('Created new customer:', customer);
+      }
 
-    const order = await Order.create({
-      order_id: data.order_id,
-      order_date: orderDate,
-      subtotal: data.subtotal_amount,
-      delivery_fees: data.delivery_fees,
-      discount: data.discount,
-      total: data.total,
-      delivery_partner: data.delivery_partner,
-      CustomerId: customer.id,
+      // Parse the order date if provided, otherwise use current date
+      const orderDate = data.order_date ? moment(data.order_date).toDate() : new Date();
+      if (isNaN(orderDate)) {
+        throw new Error('Invalid order date format');
+      }
+
+      console.log('Order date:', orderDate);
+
+      // Create the order with optional fields
+      const order = await Order.create({
+        order_id: data.order_id || `ORD-${Date.now()}`, // Generate a default order ID if not provided
+        order_date: orderDate,
+        subtotal: data.subtotal_amount || 0,
+        delivery_fees: data.delivery_fees || 0,
+        discount: data.discount || 0,
+        total: data.total || 0,
+        delivery_partner: data.delivery_partner || 'Unknown',
+        CustomerId: customer.id,
+      }, { transaction: t });
+
+      console.log('Created order:', order);
+
+      // Create order items if provided
+      if (data.order_item_list && Array.isArray(data.order_item_list)) {
+        const orderItems = data.order_item_list.map(item => ({
+          item_name: item.item_name || 'Unnamed Item',
+          price: item.price || 0,
+          quantity: item.quantity || 1,
+          OrderId: order.id,
+        }));
+
+        const createdOrderItems = await OrderItem.bulkCreate(orderItems, { transaction: t });
+        console.log('Created order items:', createdOrderItems);
+      }
+
+      return { customer, order };
     });
 
-    const orderItems = data.order_item_list.map(item => ({
-      item_name: item.item_name,
-      price: item.price,
-      quantity: item.quantity,
-      OrderId: order.id,
-    }));
-
-    await OrderItem.bulkCreate(orderItems);
-
-    res.status(201).json({ message: 'Order approved and saved successfully' });
+    res.status(201).json({ 
+      message: 'Order approved and saved successfully',
+      customer: result.customer,
+      order: result.order
+    });
   } catch (error) {
     console.error('Error approving order:', error);
-    res.status(500).json({ error: 'An error occurred while saving the order' });
+    res.status(500).json({ error: error.message || 'An error occurred while saving the order' });
   }
 });
+
 
 module.exports = router;
