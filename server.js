@@ -6,9 +6,10 @@ const ordersRouter = require('./routes/orders');
 const authRouter = require('./routes/auth');
 const port = 3056;
 
-// Logging middleware
+// Detailed logging middleware
 app.use((req, res, next) => {
-  console.log(`Received ${req.method} request for ${req.url}`);
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  console.log('Headers:', req.headers);
   next();
 });
 
@@ -17,16 +18,35 @@ app.get('/', (req, res) => {
   res.json({ message: "Welcome to the API" });
 });
 
-// Sync database
-sequelize.sync();
+// Test route
+app.get('/test', (req, res) => {
+  res.json({ message: "Test route reached" });
+});
 
 // Routes
 app.use('/customers', customersRouter);
 app.use('/orders', ordersRouter);
 app.use('/auth', authRouter);
 
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+// 404 handler
+app.use((req, res, next) => {
+  res.status(404).json({ error: "Not Found", path: req.url });
+});
+
+// Error handler
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ error: "Internal Server Error" });
+});
+
+// Sync database
+sequelize.sync().then(() => {
+  console.log('Database synced');
+  app.listen(port, () => {
+    console.log(`Server is running on port ${port}`);
+  });
+}).catch(err => {
+  console.error('Unable to sync database:', err);
 });
 
 process.on('unhandledRejection', (error) => {
