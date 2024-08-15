@@ -5,7 +5,7 @@ const ordersRouter = require('./routes/orders');
 const authRouter = require('./routes/auth');
 
 
-const port = 3001;
+const port = 3456;
 
 // Sync database
 sequelize.sync();
