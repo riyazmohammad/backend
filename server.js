@@ -4,7 +4,7 @@ const sequelize = require('./config/database');
 const customersRouter = require('./routes/customers');
 const ordersRouter = require('./routes/orders');
 const authRouter = require('./routes/auth');
-const port = 3056;
+const port = 3000;
 
 // Detailed logging middleware
 app.use((req, res, next) => {
