@@ -23,6 +23,10 @@ app.get('/test', (req, res) => {
   res.json({ message: "Test route reached" });
 });
 
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
 // Routes
 app.use('/customers', customersRouter);
 app.use('/orders', ordersRouter);
